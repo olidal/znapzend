@@ -2,6 +2,7 @@ package ZnapZend;
 
 use Mojo::Base -base;
 use Mojo::IOLoop::ForkCall;
+use Mojo::IOLoop::Delay;
 use Mojo::Log;
 use ZnapZend::Config;
 use ZnapZend::ZFS;
