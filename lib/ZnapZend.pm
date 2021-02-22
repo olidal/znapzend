@@ -24,7 +24,7 @@ my %logLevels = (
 ### attributes ###
 
 has debug                   => sub { 0 };
-has resume          => sub { 0 };
+has resume                  => sub { 0 };
 has noaction                => sub { 0 };
 has nodestroy               => sub { 0 };
 has oracleMode              => sub { 0 };
