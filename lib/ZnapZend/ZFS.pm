@@ -368,24 +368,39 @@ sub destroySnapshots {
         return 1;
     }
 
-    #combinedDestroy
-    for my $task (@toDestroy){
-        my ($remote, $dataSetPathAndSnap) = $splitHostDataSet->($task);
-        my ($dataSet, $snapshot) = $splitDataSetSnapshot->($dataSetPathAndSnap);
-        #tag local snapshots as 'local' so we have a key to build the hash
-        $remote = $remote || 'local';
-        exists $toDestroy{$remote} or $toDestroy{$remote} = [];
-        push @{$toDestroy{$remote}}, scalar @{$toDestroy{$remote}} ? $snapshot : "$dataSet\@$snapshot" ;
-    }
+    my $size = @toDestroy;
 
-    for $remote (keys %toDestroy){
-        #check if remote is flaged as 'local'.
-        my @ssh = $self->$buildRemote($remote ne 'local'
-            ? $remote : undef, [@{$self->priv}, qw(zfs destroy), @recursive, join(',', @{$toDestroy{$remote}})]);
+    # INSPEERE: Fix when number of snapshot is large that it exceeds the
+    # size allowed for a command-line. 
+    while ($size > 0) {
+        #combinedDestroy
 
-        print STDERR '# ' . (($self->noaction || $self->nodestroy) ? "WOULD # " : "")  . join(' ', @ssh) . "\n" if $self->debug;
-        system(@ssh) && Mojo::Exception->throw("ERROR: cannot destroy snapshot(s) $toDestroy[0]")
-            if !($self->noaction || $self->nodestroy);
+        # INSPEERE: Split execution in batches of 1000 snaps.
+        # FIX ME: Dirty fix, replace fixed value with a global param.
+        my $min = $size > 1000? 1000: $size;
+        my %toDestroyBatch;
+
+        my @toDestroyBatch = splice(@toDestroy, 0, $min);
+        for my $task (@toDestroyBatch){
+            my ($remote, $dataSetPathAndSnap) = $splitHostDataSet->($task);
+            my ($dataSet, $snapshot) = $splitDataSetSnapshot->($dataSetPathAndSnap);
+            #tag local snapshots as 'local' so we have a key to build the hash
+            $remote = $remote || 'local';
+            exists $toDestroyBatch{$remote} or $toDestroyBatch{$remote} = [];
+            push @{$toDestroyBatch{$remote}}, scalar @{$toDestroyBatch{$remote}} ? $snapshot : "$dataSet\@$snapshot" ;
+        }
+
+        for $remote (keys %toDestroyBatch){
+            #check if remote is flaged as 'local'.
+            my @ssh = $self->$buildRemote($remote ne 'local'
+                ? $remote : undef, [@{$self->priv}, qw(zfs destroy), @recursive, join(',', @{$toDestroyBatch{$remote}})]);
+
+            print STDERR '# ' . (($self->noaction || $self->nodestroy) ? "WOULD # " : "")  . join(' ', @ssh) . "\n" if $self->debug;
+            system(@ssh) && Mojo::Exception->throw("ERROR: cannot destroy snapshot(s) $toDestroyBatch[0]")
+                if !($self->noaction || $self->nodestroy);
+        }
+        @toDestroy = splice(@toDestroy, $min);
+        $size = @toDestroy;
     }
 
     return 1;
